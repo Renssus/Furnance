@@ -1,7 +1,7 @@
 package nl.bloneburg.furnace.commands;
 
 import nl.bloneburg.furnace.VirtualFurnace;
-import nl.bloneburg.furnace.gui.VirtualFurnaceInventory;
+import nl.bloneburg.furnace.gui.VirtualFurnaceGUI;
 import nl.bloneburg.furnace.storage.FurnaceData;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -28,7 +28,7 @@ public class FurnaceCommand implements CommandExecutor {
             return true;
         }
 
-        VirtualFurnaceInventory.openFurnace(player, FurnaceData.FurnaceType.FURNACE);
+        VirtualFurnaceGUI.openFurnace(player, FurnaceData.FurnaceType.FURNACE);
         return true;
     }
 }

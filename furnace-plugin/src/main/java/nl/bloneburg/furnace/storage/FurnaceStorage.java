@@ -2,8 +2,6 @@ package nl.bloneburg.furnace.storage;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import nl.bloneburg.furnace.VirtualFurnace;
@@ -36,6 +34,11 @@ public class FurnaceStorage {
     }
 
     public FurnaceData getFurnaceData(UUID playerUUID, FurnaceData.FurnaceType type) {
+        // Load player data if not in memory
+        if (!playerFurnaces.containsKey(playerUUID)) {
+            loadPlayer(playerUUID);
+        }
+        
         playerFurnaces.computeIfAbsent(playerUUID, k -> new ConcurrentHashMap<>());
         return playerFurnaces.get(playerUUID).computeIfAbsent(type, t -> new FurnaceData(playerUUID, t));
     }
@@ -43,6 +46,27 @@ public class FurnaceStorage {
     public void saveFurnaceData(UUID playerUUID, FurnaceData.FurnaceType type, FurnaceData data) {
         playerFurnaces.computeIfAbsent(playerUUID, k -> new ConcurrentHashMap<>()).put(type, data);
         savePlayer(playerUUID);
+    }
+
+    public Set<UUID> getAllPlayerUUIDs() {
+        // Load all players from disk
+        Set<UUID> uuids = new HashSet<>(playerFurnaces.keySet());
+        
+        File[] files = dataFolder.listFiles((dir, name) -> name.endsWith(".json"));
+        if (files != null) {
+            for (File file : files) {
+                try {
+                    String uuidStr = file.getName().replace(".json", "");
+                    UUID uuid = UUID.fromString(uuidStr);
+                    if (!playerFurnaces.containsKey(uuid)) {
+                        loadPlayer(uuid);
+                    }
+                    uuids.add(uuid);
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+        
+        return uuids;
     }
 
     public void loadAll() {
@@ -70,7 +94,10 @@ public class FurnaceStorage {
 
     private void loadPlayer(UUID playerUUID) {
         File file = new File(dataFolder, playerUUID.toString() + ".json");
-        if (!file.exists()) return;
+        if (!file.exists()) {
+            playerFurnaces.put(playerUUID, new ConcurrentHashMap<>());
+            return;
+        }
 
         try (FileReader reader = new FileReader(file)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
@@ -83,13 +110,22 @@ public class FurnaceStorage {
                     FurnaceData data = new FurnaceData(playerUUID, type);
                     
                     if (furnaceObj.has("input") && !furnaceObj.get("input").isJsonNull()) {
-                        data.setInputItem(deserializeItem(furnaceObj.get("input").getAsString()));
+                        String inputStr = furnaceObj.get("input").getAsString();
+                        if (!inputStr.isEmpty()) {
+                            data.setInputItem(deserializeItem(inputStr));
+                        }
                     }
                     if (furnaceObj.has("fuel") && !furnaceObj.get("fuel").isJsonNull()) {
-                        data.setFuelItem(deserializeItem(furnaceObj.get("fuel").getAsString()));
+                        String fuelStr = furnaceObj.get("fuel").getAsString();
+                        if (!fuelStr.isEmpty()) {
+                            data.setFuelItem(deserializeItem(fuelStr));
+                        }
                     }
                     if (furnaceObj.has("output") && !furnaceObj.get("output").isJsonNull()) {
-                        data.setOutputItem(deserializeItem(furnaceObj.get("output").getAsString()));
+                        String outputStr = furnaceObj.get("output").getAsString();
+                        if (!outputStr.isEmpty()) {
+                            data.setOutputItem(deserializeItem(outputStr));
+                        }
                     }
                     if (furnaceObj.has("burnTime")) {
                         data.setBurnTime(furnaceObj.get("burnTime").getAsInt());
@@ -108,10 +144,12 @@ public class FurnaceStorage {
             playerFurnaces.put(playerUUID, furnaces);
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to load player data for " + playerUUID + ": " + e.getMessage());
+            e.printStackTrace();
+            playerFurnaces.put(playerUUID, new ConcurrentHashMap<>());
         }
     }
 
-    private void savePlayer(UUID playerUUID) {
+    public void savePlayer(UUID playerUUID) {
         Map<FurnaceData.FurnaceType, FurnaceData> furnaces = playerFurnaces.get(playerUUID);
         if (furnaces == null || furnaces.isEmpty()) return;
 
@@ -122,9 +160,13 @@ public class FurnaceStorage {
             FurnaceData data = entry.getValue();
             JsonObject furnaceObj = new JsonObject();
             
-            furnaceObj.addProperty("input", data.getInputItem() != null ? serializeItem(data.getInputItem()) : null);
-            furnaceObj.addProperty("fuel", data.getFuelItem() != null ? serializeItem(data.getFuelItem()) : null);
-            furnaceObj.addProperty("output", data.getOutputItem() != null ? serializeItem(data.getOutputItem()) : null);
+            String inputSerialized = data.getInputItem() != null ? serializeItem(data.getInputItem()) : "";
+            String fuelSerialized = data.getFuelItem() != null ? serializeItem(data.getFuelItem()) : "";
+            String outputSerialized = data.getOutputItem() != null ? serializeItem(data.getOutputItem()) : "";
+            
+            furnaceObj.addProperty("input", inputSerialized);
+            furnaceObj.addProperty("fuel", fuelSerialized);
+            furnaceObj.addProperty("output", outputSerialized);
             furnaceObj.addProperty("burnTime", data.getBurnTime());
             furnaceObj.addProperty("cookTime", data.getCookTime());
             furnaceObj.addProperty("cookTimeTotal", data.getCookTimeTotal());
@@ -136,11 +178,12 @@ public class FurnaceStorage {
             gson.toJson(root, writer);
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to save player data for " + playerUUID + ": " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private String serializeItem(ItemStack item) {
-        if (item == null) return null;
+        if (item == null) return "";
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             BukkitObjectOutputStream dataOutput = new BukkitObjectOutputStream(outputStream);
@@ -149,7 +192,7 @@ public class FurnaceStorage {
             return Base64.getEncoder().encodeToString(outputStream.toByteArray());
         } catch (IOException e) {
             plugin.getLogger().warning("Failed to serialize item: " + e.getMessage());
-            return null;
+            return "";
         }
     }
 
