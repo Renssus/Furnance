@@ -1,0 +1,39 @@
+name: VirtualFurnace
+version: '${project.version}'
+main: nl.bloneburg.furnace.VirtualFurnace
+api-version: '1.21'
+authors:
+  - Bloneburg
+description: Virtual furnace, blast furnace and smoker plugin for ranks
+
+commands:
+  furnace:
+    description: Open your virtual furnace
+    usage: /<command>
+    permission: furnace.use.furnace
+  blastfurnace:
+    description: Open your virtual blast furnace
+    usage: /<command>
+    permission: furnace.use.blastfurnace
+  smoker:
+    description: Open your virtual smoker
+    usage: /<command>
+    permission: furnace.use.smoker
+
+permissions:
+  furnace.use.furnace:
+    description: Allows access to virtual furnace
+    default: false
+  furnace.use.blastfurnace:
+    description: Allows access to virtual blast furnace
+    default: false
+  furnace.use.smoker:
+    description: Allows access to virtual smoker
+    default: false
+  furnace.use.*:
+    description: Allows access to all virtual furnaces
+    default: op
+    children:
+      furnace.use.furnace: true
+      furnace.use.blastfurnace: true
+      furnace.use.smoker: true
