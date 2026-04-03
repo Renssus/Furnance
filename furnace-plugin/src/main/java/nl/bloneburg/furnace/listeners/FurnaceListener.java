@@ -2,6 +2,7 @@ package nl.bloneburg.furnace.listeners;
 
 import nl.bloneburg.furnace.VirtualFurnace;
 import nl.bloneburg.furnace.gui.VirtualFurnaceInventory;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -20,13 +21,16 @@ public class FurnaceListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
         if (!(event.getInventory() instanceof FurnaceInventory)) return;
 
         if (VirtualFurnaceInventory.hasActiveSession(player.getUniqueId())) {
-            VirtualFurnaceInventory.closeSession(player);
+            // Run on next tick to ensure inventory is fully processed
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                VirtualFurnaceInventory.closeSession(player);
+            }, 1L);
         }
     }
 

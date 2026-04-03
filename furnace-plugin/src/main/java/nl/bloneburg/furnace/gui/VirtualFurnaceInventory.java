@@ -84,7 +84,7 @@ public class VirtualFurnaceInventory {
     }
 
     public static void closeSession(Player player) {
-        VirtualFurnaceSession session = activeSessions.remove(player.getUniqueId());
+        VirtualFurnaceSession session = activeSessions.get(player.getUniqueId());
         if (session == null) return;
 
         VirtualFurnace plugin = VirtualFurnace.getInstance();
@@ -94,21 +94,36 @@ public class VirtualFurnaceInventory {
         BlockState state = block.getState();
 
         if (state instanceof Furnace furnaceState) {
-            // Save the furnace contents
+            // Save the furnace contents - CLONE items before block is destroyed
             FurnaceData data = storage.getFurnaceData(player.getUniqueId(), session.getType());
             FurnaceInventory inv = furnaceState.getInventory();
 
-            data.setInputItem(inv.getSmelting());
-            data.setFuelItem(inv.getFuel());
-            data.setOutputItem(inv.getResult());
-            data.setBurnTime(furnaceState.getBurnTime());
-            data.setCookTime(furnaceState.getCookTime());
+            // Clone items to prevent them being lost when block is removed
+            ItemStack inputClone = inv.getSmelting() != null ? inv.getSmelting().clone() : null;
+            ItemStack fuelClone = inv.getFuel() != null ? inv.getFuel().clone() : null;
+            ItemStack outputClone = inv.getResult() != null ? inv.getResult().clone() : null;
+            short burnTime = furnaceState.getBurnTime();
+            short cookTime = furnaceState.getCookTime();
+
+            // Now remove from active sessions
+            activeSessions.remove(player.getUniqueId());
+
+            // Restore original block
+            block.setType(session.getOriginalMaterial());
+
+            // Now save the cloned data
+            data.setInputItem(inputClone);
+            data.setFuelItem(fuelClone);
+            data.setOutputItem(outputClone);
+            data.setBurnTime(burnTime);
+            data.setCookTime(cookTime);
 
             storage.saveFurnaceData(player.getUniqueId(), session.getType(), data);
+        } else {
+            // Remove session and restore the block if not a furnace
+            activeSessions.remove(player.getUniqueId());
+            block.setType(session.getOriginalMaterial());
         }
-
-        // Restore original block
-        block.setType(session.getOriginalMaterial());
     }
 
     public static boolean hasActiveSession(UUID playerUUID) {
